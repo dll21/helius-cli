@@ -109,7 +109,7 @@ class HeliusApiClient {
    * @param webhook Webhook data
    * @returns Created webhook
    */
-  async createWebhook(webhook: Omit<Webhook, "id">): Promise<Webhook> {
+  async createWebhook(webhook: Omit<Webhook, "webhookID">): Promise<Webhook> {
     return this.request<Webhook>("POST", "/webhooks", webhook);
   }
 

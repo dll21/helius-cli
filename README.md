@@ -7,6 +7,8 @@ A command-line interface for managing [Helius](https://helius.xyz) webhooks.
 - Configure API key and base URL
 - List all webhooks
 - Get webhook details by ID
+- Create new webhooks
+- Delete webhooks
 - More features coming soon!
 
 ## Installation
@@ -78,7 +80,48 @@ helius webhooks list
 #### Get webhook details by ID
 
 ```bash
-helius webhooks get WEBHOOK_ID
+helius webhooks get <webhookID>
+```
+
+#### Create a new webhook
+
+You can create a webhook in interactive mode, which will guide you through the process:
+
+```bash
+helius webhooks create --interactive
+```
+
+Or you can specify all parameters directly:
+
+```bash
+helius webhooks create \
+  --url "https://your-webhook-url.com" \
+  --type "enhanced" \
+  --types "NFT_SALE,SOL_TRANSFER" \
+  --addresses "address1,address2" \
+  --auth-header "your-auth-header" \
+  --status "all"
+```
+
+Available options:
+- `--url` or `-u`: Webhook URL (required for non-interactive mode)
+- `--type` or `-t`: Webhook type (required for non-interactive mode) - One of: raw, rawDevnet, enhanced, enhancedDevnet, discord, discordDevnet
+- `--types`: Transaction types to monitor (comma-separated, required for non-interactive mode) - See available types in interactive mode
+- `--addresses`: Account addresses to monitor (comma-separated, required for non-interactive mode)
+- `--auth-header` or `-a`: Authorization header (optional)
+- `--status` or `-s`: Transaction status (optional) - One of: all, success, failed
+- `--interactive`: Use interactive mode to create webhook (no other options required)
+
+#### Delete a webhook
+
+```bash
+helius webhooks delete <webhookID>
+```
+
+You can skip the confirmation prompt by using the `--force` or `-f` flag:
+
+```bash
+helius webhooks delete <webhookID> --force
 ```
 
 ### Configuration
