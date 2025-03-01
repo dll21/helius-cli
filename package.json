@@ -1,0 +1,40 @@
+{
+  "name": "helius-cli",
+  "version": "1.0.0",
+  "description": "CLI tool for managing Helius webhooks",
+  "main": "dist/index.js",
+  "bin": {
+    "helius": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "helius",
+    "webhooks",
+    "cli",
+    "solana"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/conf": "^3.0.0",
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^22.13.8",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "chalk": "^4.1.2",
+    "commander": "^12.0.0",
+    "conf": "^10.2.0",
+    "dotenv": "^16.4.5",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1"
+  }
+}
