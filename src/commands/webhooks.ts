@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import chalk from "chalk";
 import ora from "ora";
+import inquirer from "inquirer";
 import { heliusApi, Webhook } from "../api";
 import { ensureConfig } from "../config";
 
@@ -85,22 +86,67 @@ export function registerWebhookCommands(program: Command): void {
 
   // Get webhook by ID
   webhooks
-    .command("get <id>")
+    .command("get <webhookID>")
     .description("Get webhook by ID")
-    .action(async (id: string) => {
+    .action(async (webhookID: string) => {
       try {
         // Ensure configuration is set
         await ensureConfig();
 
-        const spinner = ora(`Fetching webhook ${id}...`).start();
+        const spinner = ora(`Fetching webhook ${webhookID}...`).start();
 
-        const webhook = await heliusApi.getWebhook(id);
+        const webhook = await heliusApi.getWebhook(webhookID);
 
-        spinner.succeed(`Found webhook ${id}`);
+        spinner.succeed(`Found webhook ${webhookID}`);
         console.log(formatWebhook(webhook));
       } catch (error) {
         console.error(
           chalk.red("Error fetching webhook:"),
+          error instanceof Error ? error.message : error
+        );
+        process.exit(1);
+      }
+    });
+
+  // Delete webhook by ID
+  webhooks
+    .command("delete <webhookID>")
+    .description("Delete webhook by ID")
+    .option("-f, --force", "Skip confirmation prompt")
+    .action(async (webhookID: string, options) => {
+      try {
+        // Ensure configuration is set
+        await ensureConfig();
+
+        // Confirm deletion unless force option is used
+        if (!options.force) {
+          const { confirm } = await inquirer.prompt([
+            {
+              type: "confirm",
+              name: "confirm",
+              message: `Are you sure you want to delete webhook ${webhookID}?`,
+              default: false,
+            },
+          ]);
+
+          if (!confirm) {
+            console.log(chalk.yellow("Deletion cancelled"));
+            return;
+          }
+        }
+
+        const spinner = ora(`Deleting webhook ${webhookID}...`).start();
+
+        const result = await heliusApi.deleteWebhook(webhookID);
+
+        if (result.success) {
+          spinner.succeed(`Successfully deleted webhook ${webhookID}`);
+        } else {
+          spinner.fail(`Failed to delete webhook ${webhookID}`);
+        }
+      } catch (error) {
+        console.error(
+          chalk.red("Error deleting webhook:"),
           error instanceof Error ? error.message : error
         );
         process.exit(1);

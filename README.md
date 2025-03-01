@@ -7,6 +7,7 @@ A command-line interface for managing [Helius](https://helius.xyz) webhooks.
 - Configure API key and base URL
 - List all webhooks
 - Get webhook details by ID
+- Delete webhooks
 - More features coming soon!
 
 ## Installation
@@ -78,7 +79,19 @@ helius webhooks list
 #### Get webhook details by ID
 
 ```bash
-helius webhooks get WEBHOOK_ID
+helius webhooks get <webhookID>
+```
+
+#### Delete a webhook
+
+```bash
+helius webhooks delete <webhookID>
+```
+
+You can skip the confirmation prompt by using the `--force` or `-f` flag:
+
+```bash
+helius webhooks delete <webhookID> --force
 ```
 
 ### Configuration

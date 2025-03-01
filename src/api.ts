@@ -97,11 +97,11 @@ class HeliusApiClient {
 
   /**
    * Gets a webhook by ID
-   * @param id Webhook ID
+   * @param webhookID Webhook ID
    * @returns Webhook details
    */
-  async getWebhook(id: string): Promise<Webhook> {
-    return this.request<Webhook>("GET", `/webhooks/${id}`);
+  async getWebhook(webhookID: string): Promise<Webhook> {
+    return this.request<Webhook>("GET", `/webhooks/${webhookID}`);
   }
 
   /**
@@ -109,30 +109,33 @@ class HeliusApiClient {
    * @param webhook Webhook data
    * @returns Created webhook
    */
-  async createWebhook(webhook: Omit<Webhook, "id">): Promise<Webhook> {
+  async createWebhook(webhook: Omit<Webhook, "webhookID">): Promise<Webhook> {
     return this.request<Webhook>("POST", "/webhooks", webhook);
   }
 
   /**
    * Updates a webhook
-   * @param id Webhook ID
+   * @param webhookID Webhook ID
    * @param webhook Updated webhook data
    * @returns Updated webhook
    */
   async updateWebhook(
-    id: string,
-    webhook: Partial<Omit<Webhook, "id">>
+    webhookID: string,
+    webhook: Partial<Omit<Webhook, "webhookID">>
   ): Promise<Webhook> {
-    return this.request<Webhook>("PUT", `/webhooks/${id}`, webhook);
+    return this.request<Webhook>("PUT", `/webhooks/${webhookID}`, webhook);
   }
 
   /**
    * Deletes a webhook
-   * @param id Webhook ID
+   * @param webhookID Webhook ID
    * @returns Success status
    */
-  async deleteWebhook(id: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>("DELETE", `/webhooks/${id}`);
+  async deleteWebhook(webhookID: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(
+      "DELETE",
+      `/webhooks/${webhookID}`
+    );
   }
 }
 
