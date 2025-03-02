@@ -20,7 +20,7 @@ const TRANSACTION_TYPES = [
   "SWAP_TOKEN",
   "TOKEN_MINT",
   "TOKEN_BURN",
-  "TOKEN_TRANSFER",
+  "TRANSFER",
   "SOL_TRANSFER",
   "STAKE",
   "STAKE_DELEGATION",
@@ -60,7 +60,7 @@ ${chalk.bold("Account Addresses:")} ${
   }
 ${
   webhook.txnStatus
-    ? `${chalk.bold("Transaction Status:")} ${webhook.txnStatus.join(", ")}`
+    ? `${chalk.bold("Transaction Status:")} ${webhook.txnStatus}`
     : ""
 }
 ${webhook.encoding ? `${chalk.bold("Encoding:")} ${webhook.encoding}` : ""}
@@ -167,6 +167,10 @@ export function registerWebhookCommands(program: Command): void {
       "--addresses <addresses>",
       "Account addresses to monitor (comma-separated list)"
     )
+    .option(
+      "--collection <collectionAddress>",
+      "NFT collection address to track all NFTs from"
+    )
     .option("--interactive", "Use interactive mode to create webhook")
     .action(async (options) => {
       try {
@@ -174,10 +178,63 @@ export function registerWebhookCommands(program: Command): void {
         await ensureConfig();
 
         let webhookData: Omit<Webhook, "webhookID">;
+        let accountAddresses: string[] = [];
+
+        // Process collection address if provided
+        if (options.collection) {
+          const spinner = ora(
+            `Fetching NFTs from collection ${options.collection}...`
+          ).start();
+
+          try {
+            const nftAddresses = await heliusApi.getNftAddressesFromCollection(
+              options.collection
+            );
+            spinner.succeed(
+              `Found ${nftAddresses.length} NFTs in collection ${options.collection}`
+            );
+
+            if (nftAddresses.length === 0) {
+              console.log(
+                chalk.yellow(
+                  "No NFTs found in the collection. Please check the collection address."
+                )
+              );
+            } else {
+              // Ask for confirmation before adding all NFT addresses
+              const { confirm } = await inquirer.prompt([
+                {
+                  type: "confirm",
+                  name: "confirm",
+                  message: `Do you want to add ${nftAddresses.length} NFT addresses from this collection to your webhook?`,
+                  default: true,
+                },
+              ]);
+
+              if (confirm) {
+                accountAddresses = nftAddresses;
+                console.log(
+                  chalk.green(
+                    `Added ${nftAddresses.length} NFT addresses to the webhook.`
+                  )
+                );
+              } else {
+                console.log(chalk.yellow("NFT addresses not added."));
+              }
+            }
+          } catch (error) {
+            spinner.fail(
+              `Failed to fetch NFTs from collection: ${
+                error instanceof Error ? error.message : error
+              }`
+            );
+            console.log(chalk.yellow("Continuing without collection NFTs..."));
+          }
+        }
 
         if (options.interactive) {
           // Interactive mode
-          webhookData = await promptForWebhookData();
+          webhookData = await promptForWebhookData(accountAddresses);
         } else {
           // Command line mode
           if (!options.url) {
@@ -210,16 +267,6 @@ export function registerWebhookCommands(program: Command): void {
             process.exit(1);
           }
 
-          if (!options.addresses) {
-            console.error(
-              chalk.red(
-                "Error: Account addresses are required for non-interactive mode"
-              )
-            );
-            console.log("Use --addresses option or --interactive mode");
-            process.exit(1);
-          }
-
           // Parse transaction types
           const transactionTypes = options.types
             .split(",")
@@ -236,10 +283,38 @@ export function registerWebhookCommands(program: Command): void {
             }
           }
 
-          // Parse account addresses
-          const accountAddresses = options.addresses
-            .split(",")
-            .map((a: string) => a.trim());
+          // If we have addresses from the collection, use them
+          // Otherwise, require addresses from command line
+          if (accountAddresses.length === 0) {
+            if (!options.addresses) {
+              console.error(
+                chalk.red(
+                  "Error: Account addresses are required for non-interactive mode"
+                )
+              );
+              console.log(
+                "Use --addresses option, --collection option, or --interactive mode"
+              );
+              process.exit(1);
+            }
+
+            // Parse account addresses from command line
+            accountAddresses = options.addresses
+              .split(",")
+              .map((a: string) => a.trim());
+          } else if (options.addresses) {
+            // If we have both collection addresses and command line addresses, merge them
+            const additionalAddresses = options.addresses
+              .split(",")
+              .map((a: string) => a.trim());
+
+            accountAddresses = [...accountAddresses, ...additionalAddresses];
+            console.log(
+              chalk.green(
+                `Added ${additionalAddresses.length} additional addresses from command line.`
+              )
+            );
+          }
 
           // Validate webhook type
           if (!WEBHOOK_TYPES.includes(options.type)) {
@@ -265,7 +340,7 @@ export function registerWebhookCommands(program: Command): void {
             transactionTypes,
             accountAddresses,
             authHeader: options.authHeader,
-            txnStatus: options.status ? [options.status] : undefined,
+            txnStatus: options.status ? options.status : undefined,
           };
         }
 
@@ -332,17 +407,21 @@ export function registerWebhookCommands(program: Command): void {
 
 /**
  * Prompt user for webhook data in interactive mode
+ * @param prefilledAddresses Optional array of addresses to prefill
  * @returns Webhook data
  */
-async function promptForWebhookData(): Promise<Omit<Webhook, "webhookID">> {
+async function promptForWebhookData(
+  prefilledAddresses: string[] = []
+): Promise<Omit<Webhook, "webhookID">> {
   console.log(chalk.bold("\nCreate a new webhook:"));
 
-  const answers = await inquirer.prompt([
+  // Prepare basic questions
+  const basicQuestions: any[] = [
     {
       type: "input",
       name: "webhookURL",
       message: "Enter the webhook URL:",
-      validate: (input) =>
+      validate: (input: string) =>
         input.trim() !== "" ? true : "Webhook URL is required",
     },
     {
@@ -368,32 +447,178 @@ async function promptForWebhookData(): Promise<Omit<Webhook, "webhookID">> {
       name: "transactionTypes",
       message: "Select transaction types to monitor:",
       choices: TRANSACTION_TYPES,
-      validate: (input) =>
+      validate: (input: any) =>
         input.length > 0 ? true : "At least one transaction type is required",
     },
+  ];
+
+  // Get basic information first
+  const basicAnswers = await inquirer.prompt(basicQuestions);
+
+  // Handle collection address if no addresses are prefilled
+  let useCollection = false;
+  let collectionAddress = "";
+
+  if (prefilledAddresses.length === 0) {
+    const collectionQuestion = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "useCollection",
+        message: "Do you want to track NFTs from a collection?",
+        default: false,
+      },
+    ]);
+
+    useCollection = collectionQuestion.useCollection;
+
+    if (useCollection) {
+      const collectionAddressQuestion = await inquirer.prompt([
+        {
+          type: "input",
+          name: "collectionAddress",
+          message: "Enter the collection address:",
+          validate: (input: string) =>
+            input.trim() !== "" ? true : "Collection address is required",
+        },
+      ]);
+
+      collectionAddress = collectionAddressQuestion.collectionAddress;
+    }
+  }
+
+  // Process collection address if provided
+  let accountAddresses = [...prefilledAddresses];
+  let collectionAddressesAdded = false;
+
+  if (useCollection && collectionAddress) {
+    const spinner = ora(
+      `Fetching NFTs from collection ${collectionAddress}...`
+    ).start();
+
+    try {
+      const nftAddresses = await heliusApi.getNftAddressesFromCollection(
+        collectionAddress
+      );
+      spinner.succeed(
+        `Found ${nftAddresses.length} NFTs in collection ${collectionAddress}`
+      );
+
+      if (nftAddresses.length === 0) {
+        console.log(
+          chalk.yellow(
+            "No NFTs found in the collection. Please check the collection address."
+          )
+        );
+      } else {
+        // Ask for confirmation before adding all NFT addresses
+        const { confirm } = await inquirer.prompt([
+          {
+            type: "confirm",
+            name: "confirm",
+            message: `Do you want to add ${nftAddresses.length} NFT addresses from this collection to your webhook?`,
+            default: true,
+          },
+        ]);
+
+        if (confirm) {
+          accountAddresses = [...accountAddresses, ...nftAddresses];
+          collectionAddressesAdded = true;
+          console.log(
+            chalk.green(
+              `Added ${nftAddresses.length} NFT addresses from collection to the webhook.`
+            )
+          );
+        } else {
+          console.log(chalk.yellow("NFT addresses from collection not added."));
+        }
+      }
+    } catch (error) {
+      spinner.fail(
+        `Failed to fetch NFTs from collection: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
+    }
+  }
+
+  // Ask for additional addresses
+  const addressPromptMessage =
+    prefilledAddresses.length > 0
+      ? "Enter additional account addresses to monitor (comma-separated, optional):"
+      : collectionAddressesAdded
+      ? "Enter additional account addresses to monitor (comma-separated, optional):"
+      : "Enter account addresses to monitor (comma-separated):";
+
+  const addressRequired = !(
+    prefilledAddresses.length > 0 || collectionAddressesAdded
+  );
+
+  const addressQuestion = await inquirer.prompt([
     {
       type: "input",
       name: "accountAddresses",
-      message: "Enter account addresses to monitor (comma-separated):",
-      validate: (input) =>
-        input.trim() !== "" ? true : "At least one account address is required",
-      filter: (input) => input.split(",").map((a: string) => a.trim()),
+      message: addressPromptMessage,
+      validate: (input: string) => {
+        if (!addressRequired) {
+          return true;
+        }
+        return input.trim() !== ""
+          ? true
+          : "At least one account address is required";
+      },
+      filter: (input: string) =>
+        input ? input.split(",").map((a: string) => a.trim()) : [],
     },
   ]);
 
+  // Add any additional addresses from the prompt
+  if (
+    addressQuestion.accountAddresses &&
+    addressQuestion.accountAddresses.length > 0
+  ) {
+    accountAddresses = [
+      ...accountAddresses,
+      ...addressQuestion.accountAddresses,
+    ];
+    console.log(
+      chalk.green(
+        `Added ${addressQuestion.accountAddresses.length} additional addresses from input.`
+      )
+    );
+  }
+
+  // If we still have no addresses, prompt again
+  if (accountAddresses.length === 0) {
+    console.log(chalk.red("Error: At least one account address is required."));
+    const { additionalAddresses } = await inquirer.prompt([
+      {
+        type: "input",
+        name: "additionalAddresses",
+        message: "Enter account addresses to monitor (comma-separated):",
+        validate: (input) =>
+          input.trim() !== ""
+            ? true
+            : "At least one account address is required",
+        filter: (input) => input.split(",").map((a: string) => a.trim()),
+      },
+    ]);
+
+    accountAddresses = additionalAddresses;
+  }
+
   // Handle txnStatus special case
   const txnStatus =
-    answers.txnStatus === "Skip (don't filter by status)"
+    basicAnswers.txnStatus === "Skip (don't filter by status)"
       ? undefined
-      : [answers.txnStatus];
+      : [basicAnswers.txnStatus];
 
   return {
-    webhookURL: answers.webhookURL,
-    webhookType: answers.webhookType,
-    authHeader: answers.authHeader || undefined,
-    txnStatus,
-    transactionTypes: answers.transactionTypes,
-    accountAddresses: answers.accountAddresses,
+    webhookURL: basicAnswers.webhookURL,
+    webhookType: basicAnswers.webhookType,
+    authHeader: basicAnswers.authHeader || undefined,
+    txnStatus: basicAnswers.txnStatus,
+    transactionTypes: basicAnswers.transactionTypes,
+    accountAddresses,
   };
 }
 

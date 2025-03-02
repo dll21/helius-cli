@@ -9,7 +9,7 @@ export interface Webhook {
   accountAddresses: string[];
   webhookType: string;
   authHeader?: string;
-  txnStatus?: string[];
+  txnStatus?: string;
   encoding?: string;
   encoding_config?: {
     format: string;
@@ -133,6 +133,81 @@ class HeliusApiClient {
    */
   async deleteWebhook(id: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>("DELETE", `/webhooks/${id}`);
+  }
+
+  /**
+   * Fetches all NFT addresses from a collection
+   * @param collectionAddress The collection address
+   * @returns Array of NFT addresses
+   */
+  async getNftAddressesFromCollection(
+    collectionAddress: string
+  ): Promise<string[]> {
+    try {
+      const nftAddresses: string[] = [];
+      let page = 1;
+      let hasMorePages = true;
+
+      // The Digital Asset Standard (DAS) API uses a different endpoint than the regular Helius API
+      // For DAS API calls, we need to use the mainnet.helius-rpc.com endpoint
+      const dasApiUrl = "https://mainnet.helius-rpc.com/";
+
+      while (hasMorePages) {
+        const response = await axios({
+          method: "POST",
+          url: dasApiUrl,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "helius-cli",
+            method: "getAssetsByGroup",
+            params: {
+              groupKey: "collection",
+              groupValue: collectionAddress,
+              page: page,
+              limit: 1000,
+            },
+          }),
+          params: {
+            "api-key": this.apiKey,
+          },
+        });
+
+        const result = response.data.result;
+
+        if (!result || !result.items || result.items.length === 0) {
+          hasMorePages = false;
+        } else {
+          // Extract NFT addresses (asset IDs) from the response
+          const addresses = result.items.map((item: any) => item.id);
+          nftAddresses.push(...addresses);
+
+          // Check if we need to fetch more pages
+          if (result.items.length < 1000) {
+            hasMorePages = false;
+          } else {
+            page++;
+          }
+        }
+      }
+
+      return nftAddresses;
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      if (axiosError.response) {
+        throw new Error(
+          `API Error: ${axiosError.response.status} - ${JSON.stringify(
+            axiosError.response.data
+          )}`
+        );
+      } else if (axiosError.request) {
+        throw new Error("No response received from API");
+      } else {
+        throw new Error(`Error fetching NFT addresses: ${axiosError.message}`);
+      }
+    }
   }
 }
 

@@ -103,11 +103,30 @@ helius webhooks create \
   --status "all"
 ```
 
+You can also track all NFTs from a specific collection:
+
+```bash
+helius webhooks create \
+  --url "https://your-webhook-url.com" \
+  --type "enhanced" \
+  --types "NFT_SALE,SOL_TRANSFER" \
+  --collection "25EDBwCQQrJy9SMcXw97RymxEs4qiXHLY6EcF1sBxd5t" \
+  --auth-header "your-auth-header" \
+  --status "all"
+```
+
+Or combine collection tracking with interactive mode:
+
+```bash
+helius webhooks create --collection "25EDBwCQQrJy9SMcXw97RymxEs4qiXHLY6EcF1sBxd5t" --interactive
+```
+
 Available options:
 - `--url` or `-u`: Webhook URL (required for non-interactive mode)
 - `--type` or `-t`: Webhook type (required for non-interactive mode) - One of: raw, rawDevnet, enhanced, enhancedDevnet, discord, discordDevnet
 - `--types`: Transaction types to monitor (comma-separated, required for non-interactive mode) - See available types in interactive mode
-- `--addresses`: Account addresses to monitor (comma-separated, required for non-interactive mode)
+- `--addresses`: Account addresses to monitor (comma-separated, required for non-interactive mode unless --collection is specified)
+- `--collection`: NFT collection address to track all NFTs from (optional)
 - `--auth-header` or `-a`: Authorization header (optional)
 - `--status` or `-s`: Transaction status (optional) - One of: all, success, failed
 - `--interactive`: Use interactive mode to create webhook (no other options required)
